@@ -5,61 +5,6 @@
     <url>/2020/08/29/Hexo%E6%95%99%E7%A8%8B/</url>
     <content><![CDATA[<p>Less指令：</p>
 <p>tail：</p>
-<p>问题描述：剩余充值和剩余赠送为null</p>
-<p>账户交易类型枚举：CompanyAccountOperateEnum</p>
-<p>解决思路：</p>
-<ol>
-<li><p>找出一条有剩余充值金额和剩余赠送金额的数据，根据资金方向能够计算出上下行数据的金额。</p>
-<p>计算公式：根据direction_type区分</p>
-<p>10（收入）：</p>
-<ul>
-<li>company_deposit_balance = before_log[company_deposit_balance] + current_log[deposit_amount]</li>
-<li>company_given_balance = before_log[company_given_balance] + current_log[given_amount]</li>
-<li>company_deposit_balance = after_log[company_deposit_balance] + current_log[deposit_amount]</li>
-<li>company_given_balance = after_log[company_given_balance] +current_log[given_amount]</li>
-</ul>
-</li>
-</ol>
-<p>   20（支出）：</p>
-<ul>
-<li>company_deposit_balance = before_log[company_deposit_balance]-current_log[deposit_amount]</li>
-<li>company_given_balance = before_log[company_given_balance]-current_log[given_amount]</li>
-<li>company_deposit_balance = after_log[company_deposit_balance] - current_log[deposit_amount]</li>
-<li>company_given_balance = after_log[company_given_balance] - current_log[given_amount]</li>
-</ul>
-<ol start="2">
-<li><p>检查充返合作模式公司的充返比在4月一日后有无变化，或者说是何时变化，如果没有变化，我们可以根据balance_amount来计算出来剩余充值金额和剩余赠送金额，如果是直充合作模式，那么company_deposit_balance的值等于balance_amount并且company_given_balance的值为0，充返比例字段：company_info::proportion。我可以拿(company_account_log  cal left join company_account ca  on id = ca.company_account_id left join company_info ci on  cal.gas_id = ci.id </p>
-<p>上面的情况需要考虑公司<strong>合作类型的变化以及充值返现比例的变化</strong>的时间节点。</p>
-</li>
-</ol>
-<p>根据company_info_log，找出车队合作模式以及（充返模式下）充值返利比例变动的车队更新日期。根据这个日期来截取company_account_log的时间，根据日期来进行修值</p>
-<p>合作模式改成消返后，充返比例字段还是否有作用？测试环境数据里</p>
-<figure class="highlight ebnf"><table><tr><td class="code"><pre><span class="line"><span class="attribute">OrderChangeAccountHandler</span></span><br></pre></td></tr></table></figure>
-
-<p>线上数据查询balance_amount的值是否有为null的情况，如果没有，我们可以通过一条SQL语句完成数据同步，根据消费的充值金额和赠送金额的比例来推算出剩余充值金额和赠送金额的比例</p>
-<p>动账Handler分类的流水生成方式</p>
-<ol>
-<li>下单</li>
-</ol>
-<figure class="highlight angelscript"><table><tr><td class="code"><pre><span class="line">以共享卡为准（既生成油卡流水也生成账户流水）</span><br><span class="line">账户流水金额计算：</span><br><span class="line"><span class="number">1.</span>首先获取公司账户目前的总金额，充值金额，赠送金额【如果公司创建之初是消返合作模式，那么赠送金额会为空。】【如果公司一开始是充返合作模式，后面转成消返，但是它的充值金额和赠送金额字段不会清空，流水生成时还是会参与计算】</span><br><span class="line"><span class="number">2.</span>拿到消费总金额，参与计算，计算出消费金额中的充值金额部分和赠送金额部分，这里计算的方式为【消费充值金额部分：消费总金额*(公司充值金额/公司目前总金额拿到充返比)】【消费金额赠送金额部分：消费总金额-消费充值金额部分】</span><br><span class="line"><span class="number">3.</span>计算账户剩余充值金额部分和剩余赠送金额部分【剩余充值金额 = 旧的充值金额-新的充值金额】【剩余赠送金额 = 旧的赠送金额 - 新的赠送金额】</span><br><span class="line"><span class="number">4.</span>变动后总余额 = 旧的总余额 - 新的消费总金额</span><br><span class="line"></span><br><span class="line">所以对于下单的流水补充剩余充值金额和剩余赠送金额时可以通过消费充值金额和消费赠送金额反算出来。公式：</span><br><span class="line"></span><br><span class="line">有的值为消费总金额、剩余总余额、消费充值金额、消费赠送金额</span><br><span class="line"></span><br><span class="line">【充返比 = 消费充值金额/消费总金额】</span><br><span class="line"></span><br><span class="line">【剩余充值金额 = 剩余总余额 * 充返比】【剩余赠送金额 = 剩余总余额 - 剩余充值金额】</span><br></pre></td></tr></table></figure>
-
-<p>​    2. 退款</p>
-<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">退款时业务侧会传递旧的accountOilTrace，我的理解是在申请退款时就会生成一条流水，在确认退款时，会把这笔流水设置到动账参数里，动账时会根据流水获取到金额，</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<p>在插入日志前会进行金额计算，包括扣款总金额，</p>
-<p>银企自动充值AccountTransactionTaskResource</p>
-<p>public BigDecimal divide(BigDecimal divisor,int scale, int roundingMode)</p>
-<p>第一个参数是除数，第二个参数代表保留几位小数，第三个代表的是使用的模式。</p>
-<p>BigDecimal.ROUND_DOWN:直接省略多余的小数，比如1.28如果保留1位小数，得到的就是1.2 </p>
-<p>BigDecimal.ROUND_UP:直接进位，比如1.21如果保留1位小数，得到的就是1.3 </p>
-<p>BigDecimal.ROUND_HALF_UP:四舍五入，2.35保留1位，变成2.4 </p>
-<p>BigDecimal.ROUND_HALF_DOWN:四舍五入，2.35保留1位，变成2.3 </p>
-<p>后边两种的区别就是如果保留的位数的后一位如果正好是5的时候，一个舍弃掉，一个进位。</p>
-<p>BigDecimal.setScale()方法用于格式化小数点</p>
 ]]></content>
       <categories>
         <category>web前端</category>
